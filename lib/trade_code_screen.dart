@@ -29,6 +29,113 @@ class _TradeCodeScreenState extends State<TradeCodeScreen> {
     );
   }
 
+  /// Phone A: Write NDEF message containing handshakeKey
+  Future<void> writeNdefCode() async {
+    if (!await NfcManager.instance.isAvailable()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('NFC not available on this device.')),
+      );
+      return;
+    }
+    NfcManager.instance.startSession(
+      onDiscovered: (NfcTag tag) async {
+        final ndef = Ndef.from(tag);
+        if (ndef == null || !ndef.isWritable) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Tag is not writable.')));
+          NfcManager.instance.stopSession(errorMessage: 'Tag not writable');
+          return;
+        }
+        final message = NdefMessage([NdefRecord.createText(handshakeKey)]);
+        try {
+          await ndef.write(message);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Code "$handshakeKey" written to NFC tag.')),
+          );
+          NfcManager.instance.stopSession();
+        } catch (e) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Failed to write: $e')));
+          NfcManager.instance.stopSession(errorMessage: e.toString());
+        }
+      },
+    );
+  }
+
+  /// Phone B: Read NDEF message and compare to local handshakeKey
+  Future<void> readAndCompareNdefCode() async {
+    if (!await NfcManager.instance.isAvailable()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('NFC not available on this device.')),
+      );
+      return;
+    }
+    NfcManager.instance.startSession(
+      onDiscovered: (NfcTag tag) async {
+        final ndef = Ndef.from(tag);
+        if (ndef == null) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('No NDEF data found.')));
+          NfcManager.instance.stopSession(errorMessage: 'No NDEF');
+          return;
+        }
+        final message = ndef.cachedMessage;
+        if (message == null || message.records.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No NDEF records found.')),
+          );
+          NfcManager.instance.stopSession(errorMessage: 'No records');
+          return;
+        }
+        final record = message.records.first;
+        String? receivedCode;
+        if (record.typeNameFormat == NdefRecordTypeNameFormat.nfcWellKnown &&
+            record.type == 'T') {
+          receivedCode = NdefRecord.decodeText(record);
+        }
+        if (receivedCode == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not decode code.')),
+          );
+          NfcManager.instance.stopSession(errorMessage: 'Decode failed');
+          return;
+        }
+        if (receivedCode == handshakeKey) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Codes match! Proceeding to Phase 4.')),
+          );
+          // TODO: Proceed to Phase 4
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Codes do not match. Received: $receivedCode'),
+            ),
+          );
+          // Send error response to the other device
+          if (ndef.isWritable) {
+            final errorMessage = NdefMessage([
+              NdefRecord.createText('ERROR: Code mismatch'),
+            ]);
+            try {
+              await ndef.write(errorMessage);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Error response sent to device.')),
+              );
+            } catch (e) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Failed to send error response: $e')),
+              );
+            }
+          }
+        }
+        NfcManager.instance.stopSession();
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -57,6 +164,16 @@ class _TradeCodeScreenState extends State<TradeCodeScreen> {
             ElevatedButton(
               onPressed: handshakeKey.isNotEmpty ? _proceedToScanning : null,
               child: const Text('Proceed to Scanning'),
+            ),
+            ElevatedButton(
+              onPressed: handshakeKey.isNotEmpty ? writeNdefCode : null,
+              child: const Text('Provide (Write NFC)'),
+            ),
+            ElevatedButton(
+              onPressed: handshakeKey.isNotEmpty
+                  ? readAndCompareNdefCode
+                  : null,
+              child: const Text('Request (Read NFC)'),
             ),
           ],
         ),
