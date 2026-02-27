@@ -4,6 +4,7 @@ import 'package:nfc_manager/nfc_manager.dart';
 import 'package:nfc_manager/nfc_manager.dart' as nfc;
 import 'package:nfc_manager/nfc_manager.dart'
     show Ndef, NdefMessage, NdefRecord;
+import 'contract_model.dart';
 
 class TradeCodeScreen extends StatefulWidget {
   const TradeCodeScreen({Key? key}) : super(key: key);
@@ -15,6 +16,7 @@ class TradeCodeScreen extends StatefulWidget {
 class _TradeCodeScreenState extends State<TradeCodeScreen> {
   final TextEditingController _controller = TextEditingController();
   String handshakeKey = '';
+  ContractModel? receivedContract;
 
   @override
   void dispose() {
@@ -136,6 +138,96 @@ class _TradeCodeScreenState extends State<TradeCodeScreen> {
     );
   }
 
+  Future<void> swapContractNfc({required ContractModel contract}) async {
+    if (!await NfcManager.instance.isAvailable()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('NFC not available on this device.')),
+      );
+      return;
+    }
+    NfcManager.instance.startSession(
+      onDiscovered: (NfcTag tag) async {
+        final ndef = Ndef.from(tag);
+        if (ndef == null || !ndef.isWritable) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Tag is not writable.')));
+          NfcManager.instance.stopSession(errorMessage: 'Tag not writable');
+          return;
+        }
+        final message = NdefMessage([
+          NdefRecord.createText(contract.toJsonString()),
+        ]);
+        try {
+          await ndef.write(message);
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Contract sent via NFC.')));
+          NfcManager.instance.stopSession();
+        } catch (e) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to send contract: $e')),
+          );
+          NfcManager.instance.stopSession(errorMessage: e.toString());
+        }
+      },
+    );
+  }
+
+  Future<void> receiveContractNfc() async {
+    if (!await NfcManager.instance.isAvailable()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('NFC not available on this device.')),
+      );
+      return;
+    }
+    NfcManager.instance.startSession(
+      onDiscovered: (NfcTag tag) async {
+        final ndef = Ndef.from(tag);
+        if (ndef == null) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('No NDEF data found.')));
+          NfcManager.instance.stopSession(errorMessage: 'No NDEF');
+          return;
+        }
+        final message = ndef.cachedMessage;
+        if (message == null || message.records.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No NDEF records found.')),
+          );
+          NfcManager.instance.stopSession(errorMessage: 'No records');
+          return;
+        }
+        final record = message.records.first;
+        String? contractJson;
+        if (record.typeNameFormat == NdefRecordTypeNameFormat.nfcWellKnown &&
+            record.type == 'T') {
+          contractJson = NdefRecord.decodeText(record);
+        }
+        if (contractJson == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not decode contract.')),
+          );
+          NfcManager.instance.stopSession(errorMessage: 'Decode failed');
+          return;
+        }
+        try {
+          receivedContract = ContractModel.fromJsonString(contractJson);
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Contract received!')));
+          // TODO: Navigate to SuccessScreen and show contract
+        } catch (e) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to parse contract: $e')),
+          );
+        }
+        NfcManager.instance.stopSession();
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -174,6 +266,23 @@ class _TradeCodeScreenState extends State<TradeCodeScreen> {
                   ? readAndCompareNdefCode
                   : null,
               child: const Text('Request (Read NFC)'),
+            ),
+            ElevatedButton(
+              onPressed: handshakeKey.isNotEmpty
+                  ? () {
+                      final contract = ContractModel(
+                        name: 'User Name',
+                        timestamp: DateTime.now(),
+                        signatureData: 'signature_base64_or_path',
+                      );
+                      swapContractNfc(contract: contract);
+                    }
+                  : null,
+              child: const Text('Send Contract'),
+            ),
+            ElevatedButton(
+              onPressed: handshakeKey.isNotEmpty ? receiveContractNfc : null,
+              child: const Text('Receive Contract'),
             ),
           ],
         ),
