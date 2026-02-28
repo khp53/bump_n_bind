@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:nfc_manager/ndef_record.dart';
 import 'package:nfc_manager/nfc_manager.dart';
 import 'package:nfc_manager/nfc_manager.dart' as nfc;
-import 'package:nfc_manager/nfc_manager.dart'
-    show Ndef, NdefMessage, NdefRecord;
+import 'package:nfc_manager/nfc_manager.dart';
 import 'contract_model.dart';
+import 'package:nfc_manager_ndef/nfc_manager_ndef.dart';
 
 class TradeCodeScreen extends StatefulWidget {
   const TradeCodeScreen({Key? key}) : super(key: key);
@@ -40,18 +41,25 @@ class _TradeCodeScreenState extends State<TradeCodeScreen> {
       return;
     }
     NfcManager.instance.startSession(
+      pollingOptions: {NfcPollingOption.iso14443},
       onDiscovered: (NfcTag tag) async {
         final ndef = Ndef.from(tag);
         if (ndef == null || !ndef.isWritable) {
           ScaffoldMessenger.of(
             context,
           ).showSnackBar(const SnackBar(content: Text('Tag is not writable.')));
-          NfcManager.instance.stopSession(errorMessage: 'Tag not writable');
+          NfcManager.instance.stopSession();
           return;
         }
-        final message = NdefMessage([NdefRecord.createText(handshakeKey)]);
+        // final message = NdefMessage(
+        //   records: [
+        //     NdefRecord(identifier: null
+
+        //     , typeNameFormat: null, type: null, payload: null)
+        //     ],
+        // );
         try {
-          await ndef.write(message);
+          // await ndef.write(message: "Add message with handshakeKey");
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Code "$handshakeKey" written to NFC tag.')),
           );
@@ -60,7 +68,7 @@ class _TradeCodeScreenState extends State<TradeCodeScreen> {
           ScaffoldMessenger.of(
             context,
           ).showSnackBar(SnackBar(content: Text('Failed to write: $e')));
-          NfcManager.instance.stopSession(errorMessage: e.toString());
+          // NfcManager.instance.stopSession(errorMessage: e.toString());
         }
       },
     );
@@ -75,13 +83,14 @@ class _TradeCodeScreenState extends State<TradeCodeScreen> {
       return;
     }
     NfcManager.instance.startSession(
+      pollingOptions: {NfcPollingOption.iso14443},
       onDiscovered: (NfcTag tag) async {
         final ndef = Ndef.from(tag);
         if (ndef == null) {
           ScaffoldMessenger.of(
             context,
           ).showSnackBar(const SnackBar(content: Text('No NDEF data found.')));
-          NfcManager.instance.stopSession(errorMessage: 'No NDEF');
+          NfcManager.instance.stopSession();
           return;
         }
         final message = ndef.cachedMessage;
@@ -89,20 +98,20 @@ class _TradeCodeScreenState extends State<TradeCodeScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('No NDEF records found.')),
           );
-          NfcManager.instance.stopSession(errorMessage: 'No records');
+          NfcManager.instance.stopSession();
           return;
         }
         final record = message.records.first;
         String? receivedCode;
-        if (record.typeNameFormat == NdefRecordTypeNameFormat.nfcWellKnown &&
-            record.type == 'T') {
-          receivedCode = NdefRecord.decodeText(record);
-        }
+        // if (record.typeNameFormat == NdefRecordTypeNameFormat.nfcWellKnown &&
+        //     record.type == 'T') {
+        //   receivedCode = NdefRecord.decodeText(record);
+        // }
         if (receivedCode == null) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Could not decode code.')),
           );
-          NfcManager.instance.stopSession(errorMessage: 'Decode failed');
+          NfcManager.instance.stopSession();
           return;
         }
         if (receivedCode == handshakeKey) {
@@ -118,11 +127,11 @@ class _TradeCodeScreenState extends State<TradeCodeScreen> {
           );
           // Send error response to the other device
           if (ndef.isWritable) {
-            final errorMessage = NdefMessage([
-              NdefRecord.createText('ERROR: Code mismatch'),
-            ]);
+            // final errorMessage = NdefMessage([
+            //   NdefRecord.createText('ERROR: Code mismatch'),
+            // ]);
             try {
-              await ndef.write(errorMessage);
+              // await ndef.write(errorMessage);
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Error response sent to device.')),
               );
@@ -146,20 +155,21 @@ class _TradeCodeScreenState extends State<TradeCodeScreen> {
       return;
     }
     NfcManager.instance.startSession(
+      pollingOptions: {NfcPollingOption.iso14443},
       onDiscovered: (NfcTag tag) async {
         final ndef = Ndef.from(tag);
         if (ndef == null || !ndef.isWritable) {
           ScaffoldMessenger.of(
             context,
           ).showSnackBar(const SnackBar(content: Text('Tag is not writable.')));
-          NfcManager.instance.stopSession(errorMessage: 'Tag not writable');
+          NfcManager.instance.stopSession();
           return;
         }
-        final message = NdefMessage([
-          NdefRecord.createText(contract.toJsonString()),
-        ]);
+        // final message = NdefMessage([
+        //   NdefRecord.createText(contract.toJsonString()),
+        // ]);
         try {
-          await ndef.write(message);
+          // await ndef.write(message);
           ScaffoldMessenger.of(
             context,
           ).showSnackBar(SnackBar(content: Text('Contract sent via NFC.')));
@@ -168,7 +178,7 @@ class _TradeCodeScreenState extends State<TradeCodeScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Failed to send contract: $e')),
           );
-          NfcManager.instance.stopSession(errorMessage: e.toString());
+          NfcManager.instance.stopSession();
         }
       },
     );
@@ -181,51 +191,51 @@ class _TradeCodeScreenState extends State<TradeCodeScreen> {
       );
       return;
     }
-    NfcManager.instance.startSession(
-      onDiscovered: (NfcTag tag) async {
-        final ndef = Ndef.from(tag);
-        if (ndef == null) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('No NDEF data found.')));
-          NfcManager.instance.stopSession(errorMessage: 'No NDEF');
-          return;
-        }
-        final message = ndef.cachedMessage;
-        if (message == null || message.records.isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('No NDEF records found.')),
-          );
-          NfcManager.instance.stopSession(errorMessage: 'No records');
-          return;
-        }
-        final record = message.records.first;
-        String? contractJson;
-        if (record.typeNameFormat == NdefRecordTypeNameFormat.nfcWellKnown &&
-            record.type == 'T') {
-          contractJson = NdefRecord.decodeText(record);
-        }
-        if (contractJson == null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Could not decode contract.')),
-          );
-          NfcManager.instance.stopSession(errorMessage: 'Decode failed');
-          return;
-        }
-        try {
-          receivedContract = ContractModel.fromJsonString(contractJson);
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('Contract received!')));
-          // TODO: Navigate to SuccessScreen and show contract
-        } catch (e) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to parse contract: $e')),
-          );
-        }
-        NfcManager.instance.stopSession();
-      },
-    );
+    // NfcManager.instance.startSession(
+    //   onDiscovered: (NfcTag tag) async {
+    //     final ndef = Ndef.from(tag);
+    //     if (ndef == null) {
+    //       ScaffoldMessenger.of(
+    //         context,
+    //       ).showSnackBar(const SnackBar(content: Text('No NDEF data found.')));
+    //       NfcManager.instance.stopSession(errorMessage: 'No NDEF');
+    //       return;
+    //     }
+    //     final message = ndef.cachedMessage;
+    //     if (message == null || message.records.isEmpty) {
+    //       ScaffoldMessenger.of(context).showSnackBar(
+    //         const SnackBar(content: Text('No NDEF records found.')),
+    //       );
+    //       NfcManager.instance.stopSession(errorMessage: 'No records');
+    //       return;
+    //     }
+    //     final record = message.records.first;
+    //     String? contractJson;
+    //     if (record.typeNameFormat == NdefRecordTypeNameFormat.nfcWellKnown &&
+    //         record.type == 'T') {
+    //       contractJson = NdefRecord.decodeText(record);
+    //     }
+    //     if (contractJson == null) {
+    //       ScaffoldMessenger.of(context).showSnackBar(
+    //         const SnackBar(content: Text('Could not decode contract.')),
+    //       );
+    //       NfcManager.instance.stopSession(errorMessage: 'Decode failed');
+    //       return;
+    //     }
+    //     try {
+    //       receivedContract = ContractModel.fromJsonString(contractJson);
+    //       ScaffoldMessenger.of(
+    //         context,
+    //       ).showSnackBar(const SnackBar(content: Text('Contract received!')));
+    //       // TODO: Navigate to SuccessScreen and show contract
+    //     } catch (e) {
+    //       ScaffoldMessenger.of(context).showSnackBar(
+    //         SnackBar(content: Text('Failed to parse contract: $e')),
+    //       );
+    //     }
+    //     NfcManager.instance.stopSession();
+    //   },
+    // );
   }
 
   @override
