@@ -44,55 +44,93 @@ class _SignatureCaptureState extends State<SignatureCapture> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Signature Capture')),
-      body: Column(
-        children: [
-          Expanded(
-            child: Center(
-              child: RepaintBoundary(
-                key: _canvasKey,
-                child: Container(
-                  color: Colors.grey[200],
-                  child: GestureDetector(
-                    onPanUpdate: (details) {
-                      RenderBox renderBox =
-                          context.findRenderObject() as RenderBox;
-                      setState(() {
-                        _points.add(
-                          renderBox.globalToLocal(details.globalPosition),
-                        );
-                      });
-                    },
-                    onPanEnd: (details) {
-                      setState(() {
-                        _points.add(null);
-                      });
-                    },
-                    child: CustomPaint(
-                      painter: _SignaturePainter(_points),
-                      size: Size.infinite,
+    return Stack(
+      children: [
+        Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                Color(0xFF2196F3), // Blue
+                Color(0xFF001F54), // Navy Blue
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
+        Scaffold(
+          backgroundColor: Colors.transparent,
+          appBar: AppBar(
+            title: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 4,
+                  height: 32,
+                  margin: const EdgeInsets.only(right: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.yellow,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                Text(
+                  "SIGNATURE CAPTURE",
+                  style: const TextStyle(color: Colors.white),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+          ),
+          body: Column(
+            children: [
+              Expanded(
+                child: Center(
+                  child: RepaintBoundary(
+                    key: _canvasKey,
+                    child: Container(
+                      color: Colors.grey[200],
+                      child: GestureDetector(
+                        onPanUpdate: (details) {
+                          RenderBox renderBox =
+                              context.findRenderObject() as RenderBox;
+                          setState(() {
+                            _points.add(
+                              renderBox.globalToLocal(details.globalPosition),
+                            );
+                          });
+                        },
+                        onPanEnd: (details) {
+                          setState(() {
+                            _points.add(null);
+                          });
+                        },
+                        child: CustomPaint(
+                          painter: _SignaturePainter(_points),
+                          size: Size.infinite,
+                        ),
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                ElevatedButton(
-                  onPressed: _saveSignature,
-                  child: const Text('Save'),
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    ElevatedButton(
+                      onPressed: _saveSignature,
+                      child: const Text('Save'),
+                    ),
+                    ElevatedButton(onPressed: _skip, child: const Text('Skip')),
+                  ],
                 ),
-                ElevatedButton(onPressed: _skip, child: const Text('Skip')),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -119,6 +157,3 @@ class _SignaturePainter extends CustomPainter {
   bool shouldRepaint(_SignaturePainter oldDelegate) =>
       oldDelegate.points != points;
 }
-
-// Make sure to add path_provider to pubspec.yaml
-// And import MyHomePage from main.dart if needed
