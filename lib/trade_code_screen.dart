@@ -1,10 +1,10 @@
+import 'package:bump_n_bind/success_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:nfc_manager/ndef_record.dart';
-import 'package:nfc_manager/nfc_manager.dart';
-import 'package:nfc_manager/nfc_manager.dart' as nfc;
 import 'package:nfc_manager/nfc_manager.dart';
 import 'contract_model.dart';
+import 'package:hive/hive.dart';
+import 'signature_screen.dart';
 import 'package:nfc_manager_ndef/nfc_manager_ndef.dart';
 
 class TradeCodeScreen extends StatefulWidget {
@@ -36,15 +36,10 @@ class _TradeCodeScreenState extends State<TradeCodeScreen> {
     super.dispose();
   }
 
-  void _proceedToScanning() {
-    // TODO: Implement navigation to Scanning phase
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Proceeding with handshake key: $handshakeKey')),
-    );
-  }
-
   Future<void> startNfcAndExchange() async {
-    if (!await NfcManager.instance.isAvailable()) {
+    NfcAvailability availability = await NfcManager.instance
+        .checkAvailability();
+    if (availability != NfcAvailability.enabled) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('NFC not available on this device.')),
       );
@@ -53,6 +48,7 @@ class _TradeCodeScreenState extends State<TradeCodeScreen> {
     NfcManager.instance.startSession(
       pollingOptions: {NfcPollingOption.iso14443},
       onDiscovered: (NfcTag tag) async {
+        print('NFC Tag discovered: $tag');
         final ndef = Ndef.from(tag);
         if (ndef == null) {
           ScaffoldMessenger.of(
@@ -64,12 +60,17 @@ class _TradeCodeScreenState extends State<TradeCodeScreen> {
         // Read peer's code
         final message = ndef.cachedMessage;
         String? receivedCode;
+        String? peerSignature;
         if (message != null && message.records.isNotEmpty) {
           final record = message.records.first;
-          // Uncomment and implement decoding if using text records
-          // if (record.typeNameFormat == NdefRecordTypeNameFormat.nfcWellKnown && record.type == 'T') {
-          //   receivedCode = NdefRecord.decodeText(record);
-          // }
+          receivedCode = String.fromCharCodes(
+            record.payload,
+          ); // Simplified decoding
+          // Optionally decode peer signature from additional record
+          if (message.records.length > 1) {
+            peerSignature = String.fromCharCodes(message.records[1].payload);
+          }
+          print('Received NDEF message with ${message.records.first} records');
         }
         if (receivedCode == null) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -79,22 +80,59 @@ class _TradeCodeScreenState extends State<TradeCodeScreen> {
           return;
         }
         if (receivedCode == handshakeKey) {
-          // Codes match, exchange signatures and update contract
-          final mySignature =
-              'my_signature_data'; // Replace with actual signature logic
-          final peerSignature =
-              'peer_signature_data'; // Replace with actual peer signature logic
+          // Check Hive for signature
+          var box = await Hive.openBox('signatures');
+          final mySignature = box.get('signature');
+          if (mySignature == null) {
+            // No signature, show alert and navigate
+            showDialog(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: const Text('No Signature Found'),
+                content: const Text(
+                  'You do not have any saved signature on the device. Go to signature screen?',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                    },
+                    child: const Text('Cancel'),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const SignatureScreen(),
+                        ),
+                      );
+                    },
+                    child: const Text('Go'),
+                  ),
+                ],
+              ),
+            );
+            NfcManager.instance.stopSession();
+            return;
+          }
+          // If peerSignature is not present, fallback to dummy or error
+          final peerSig = peerSignature ?? 'peer_signature_data';
           final contract = ContractModel(
             name: 'User Name',
             timestamp: DateTime.now(),
-            signatureData: mySignature + '|' + peerSignature,
+            signatureData: '$mySignature|$peerSig',
           );
           // Optionally, write contract to NFC or send to peer
           // Navigate to success page
-          Navigator.pushReplacementNamed(
+          Navigator.push(
             context,
-            '/success',
-            arguments: contract,
+            MaterialPageRoute(
+              builder: (_) => SuccessScreen(
+                contractA: contract,
+                contractB: contract, // For demo, using same contract
+              ),
+            ),
           );
         } else {
           ScaffoldMessenger.of(context).showSnackBar(

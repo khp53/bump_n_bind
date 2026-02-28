@@ -31,6 +31,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   flutter:
     sdk: flutter
+  hive: ^2.2.3
   nfc_manager: ^4.1.1
   nfc_manager_ndef: ^1.1.0
   path_provider: ^2.1.5

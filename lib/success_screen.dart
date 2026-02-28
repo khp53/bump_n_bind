@@ -6,10 +6,10 @@ class SuccessScreen extends StatelessWidget {
   final ContractModel contractB;
 
   const SuccessScreen({
-    Key? key,
+    super.key,
     required this.contractA,
     required this.contractB,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

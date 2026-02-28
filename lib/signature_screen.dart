@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:signature/signature.dart';
-import 'package:path_provider/path_provider.dart';
-import 'dart:io';
+import 'package:hive/hive.dart';
 
 class SignatureScreen extends StatefulWidget {
   const SignatureScreen({Key? key}) : super(key: key);
@@ -52,15 +51,15 @@ class _SignatureScreenState extends State<SignatureScreen> {
                     if (_controller.isNotEmpty) {
                       final signature = await _controller.toPngBytes();
                       if (signature != null) {
-                        final directory =
-                            await getApplicationDocumentsDirectory();
-                        final file = File(
-                          '${directory.path}/signature_${DateTime.now().millisecondsSinceEpoch}.png',
-                        );
-                        await file.writeAsBytes(signature);
+                        // Open the Hive box (ensure it's already initialized in main)
+                        var box = await Hive.openBox('signatures');
+                        final key = 'signature';
+                        await box.put(key, signature);
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
-                            content: Text('Signature saved at ${file.path}'),
+                            content: Text(
+                              'Signature saved in Hive with key $key',
+                            ),
                           ),
                         );
                         // Navigate to Home screen
