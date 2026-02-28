@@ -14,7 +14,6 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
       theme: ThemeData(
         // This is the theme of your application.
         //
@@ -33,7 +32,7 @@ class MyApp extends StatelessWidget {
         // tested with just a hot reload.
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: const MyHomePage(title: 'BUMP N BIND'),
       // Example: To start with SignatureCapture screen, use:
       // home: SignatureCapture(),
     );
@@ -49,35 +48,89 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   final List<_HomeAction> actions = [
-    _HomeAction('NFC Trade', true, () {
-      // TODO: Implement NFC Trade navigation
+    _HomeAction('NFC Trade', true, (context) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const TradeCodeScreen()),
+      );
     }),
     _HomeAction('Other Action 1', false, null),
     _HomeAction('Other Action 2', false, null),
   ];
 
-  void _onActionTap(int index) {
+  void _onActionTap(int index, BuildContext context) {
     if (actions[index].enabled && actions[index].onTap != null) {
-      actions[index].onTap!();
+      actions[index].onTap!(context);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(widget.title)),
-      body: ListView.builder(
-        itemCount: actions.length,
-        itemBuilder: (context, index) {
-          final action = actions[index];
-          return ListTile(
-            title: Text(action.title),
-            enabled: action.enabled,
-            onTap: action.enabled ? () => _onActionTap(index) : null,
-            trailing: action.enabled ? const Icon(Icons.chevron_right) : null,
-          );
-        },
-      ),
+    return Stack(
+      children: [
+        // Gradient background
+        Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                Color(0xFF2196F3), // Blue
+                Color(0xFF001F54), // Navy Blue
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
+        // Main content with transparent Scaffold
+        Scaffold(
+          backgroundColor: Colors.transparent,
+          appBar: AppBar(
+            title: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 4,
+                  height: 32,
+                  margin: const EdgeInsets.only(right: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.yellow,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                Text(widget.title, style: const TextStyle(color: Colors.white)),
+              ],
+            ),
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+          ),
+          body: ListView.separated(
+            itemCount: actions.length,
+            separatorBuilder: (context, index) => const SizedBox(height: 5),
+            itemBuilder: (context, index) {
+              final action = actions[index];
+              return Container(
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.5),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                margin: const EdgeInsets.symmetric(horizontal: 12),
+                child: ListTile(
+                  leading: const Icon(Icons.nfc, color: Colors.white),
+                  title: Text(
+                    action.title,
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                  enabled: action.enabled,
+                  onTap: action.enabled
+                      ? () => _onActionTap(index, context)
+                      : null,
+                  // Removed trailing icon
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }
@@ -85,6 +138,6 @@ class _MyHomePageState extends State<MyHomePage> {
 class _HomeAction {
   final String title;
   final bool enabled;
-  final VoidCallback? onTap;
+  final Function(BuildContext)? onTap;
   _HomeAction(this.title, this.enabled, this.onTap);
 }
