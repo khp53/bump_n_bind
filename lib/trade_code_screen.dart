@@ -320,6 +320,7 @@ class _TradeCodeScreenState extends State<TradeCodeScreen> {
     // 1. Check for signature in Hive first
     var box = await Hive.openBox('signatures');
     final mySignature = box.get('signature');
+    final userName = box.get('user_name') ?? 'User Name';
     if (mySignature == null || (mySignature is List && mySignature.isEmpty)) {
       // No signature, show alert and navigate
       setState(() {
@@ -395,8 +396,6 @@ class _TradeCodeScreenState extends State<TradeCodeScreen> {
 
     // 3. Nearby Connections logic
     final Strategy strategy = Strategy.P2P_CLUSTER;
-    final String userName =
-        'User'; // TODO: Replace with actual user name if available
     final String serviceId = "com.yourdomain.appname";
 
     // Start advertising
@@ -413,19 +412,19 @@ class _TradeCodeScreenState extends State<TradeCodeScreen> {
               // Handle received payload (e.g., handshakeKey, signature)
               if (payload.type == PayloadType.BYTES) {
                 final data = String.fromCharCodes(payload.bytes!);
-                // Expecting: handshakeKey|peerSignature
+                // Expecting: handshakeKey|peerSignature|peerName
                 final parts = data.split('|');
                 if (parts.length == 2 && parts[0] == handshakeKey) {
                   final peerSignature = parts[1];
                   final contractA = ContractModel(
-                    name: 'User Name',
+                    name: userName,
                     timestamp: DateTime.now(),
                     signatureData: '$mySignature',
                   );
                   final contractB = ContractModel(
-                    name: 'Peer Name',
+                    name: parts[2],
                     timestamp: DateTime.now(),
-                    signatureData: '$peerSignature',
+                    signatureData: peerSignature,
                   );
                   // Stop advertising/discovery after success
                   Nearby().stopAdvertising();
@@ -458,7 +457,7 @@ class _TradeCodeScreenState extends State<TradeCodeScreen> {
           // Called when connection is accepted/rejected
           if (status == Status.CONNECTED) {
             // Send handshakeKey and mySignature to peer
-            final payload = '$handshakeKey|$mySignature';
+            final payload = '$handshakeKey|$mySignature|$userName';
             Nearby().sendBytesPayload(
               id,
               Uint8List.fromList(payload.codeUnits),

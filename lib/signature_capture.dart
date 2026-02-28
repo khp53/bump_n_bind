@@ -3,8 +3,7 @@ import 'dart:typed_data';
 import 'package:bump_n_bind/main.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:path_provider/path_provider.dart';
-import 'dart:io';
+import 'package:hive/hive.dart';
 
 class SignatureCapture extends StatefulWidget {
   const SignatureCapture({Key? key}) : super(key: key);
@@ -16,22 +15,43 @@ class SignatureCapture extends StatefulWidget {
 class _SignatureCaptureState extends State<SignatureCapture> {
   List<Offset?> _points = [];
   final GlobalKey _canvasKey = GlobalKey();
+  final TextEditingController _nameController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadName();
+  }
+
+  Future<void> _loadName() async {
+    var box = await Hive.openBox('signatures');
+    final name = box.get('user_name');
+    if (name is String && name.isNotEmpty) {
+      _nameController.text = name;
+    }
+  }
 
   void _saveSignature() async {
+    if (_nameController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Please enter your name.')));
+      return;
+    }
     RenderRepaintBoundary boundary =
         _canvasKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
     ui.Image image = await boundary.toImage(pixelRatio: 3.0);
     ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png);
     Uint8List pngBytes = byteData!.buffer.asUint8List();
 
-    final directory = await getApplicationDocumentsDirectory();
-    final file = File(
-      '${directory.path}/signature_${DateTime.now().millisecondsSinceEpoch}.png',
-    );
-    await file.writeAsBytes(pngBytes);
+    // Save name and signature in Hive
+    var box = await Hive.openBox('signatures');
+    await box.put('user_name', _nameController.text.trim());
+    await box.put('signature', pngBytes);
+
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(SnackBar(content: Text('Signature saved to ${file.path}')));
+    ).showSnackBar(const SnackBar(content: Text('Signature and name saved.')));
   }
 
   void _skip() {
@@ -84,6 +104,21 @@ class _SignatureCaptureState extends State<SignatureCapture> {
           ),
           body: Column(
             children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24.0,
+                  vertical: 12.0,
+                ),
+                child: TextField(
+                  controller: _nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Your Name',
+                    border: OutlineInputBorder(),
+                    fillColor: Colors.white,
+                    filled: true,
+                  ),
+                ),
+              ),
               Expanded(
                 child: Center(
                   child: RepaintBoundary(
