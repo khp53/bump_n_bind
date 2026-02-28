@@ -32,6 +32,7 @@ dependencies:
   flutter:
     sdk: flutter
   nfc_manager: ^4.1.1
+  nfc_manager_ndef: ^1.1.0
   path_provider: ^2.1.5
   signature: ^6.3.0
 
