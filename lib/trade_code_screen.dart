@@ -5,7 +5,9 @@ import 'package:nfc_manager/nfc_manager.dart';
 import 'contract_model.dart';
 import 'package:hive/hive.dart';
 import 'signature_screen.dart';
-import 'package:nfc_manager_ndef/nfc_manager_ndef.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:location/location.dart' as loc;
+import 'package:nearby_connections/nearby_connections.dart';
 
 class TradeCodeScreen extends StatefulWidget {
   const TradeCodeScreen({Key? key}) : super(key: key);
@@ -23,6 +25,8 @@ class _TradeCodeScreenState extends State<TradeCodeScreen> {
   final List<FocusNode> _pinFocusNodes = List.generate(8, (_) => FocusNode());
   String handshakeKey = '';
   ContractModel? receivedContract;
+  bool _isLoading = false;
+  bool _isDiscovering = false;
 
   @override
   void dispose() {
@@ -36,115 +40,115 @@ class _TradeCodeScreenState extends State<TradeCodeScreen> {
     super.dispose();
   }
 
-  Future<void> startNfcAndExchange() async {
-    NfcAvailability availability = await NfcManager.instance
-        .checkAvailability();
-    if (availability != NfcAvailability.enabled) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('NFC not available on this device.')),
-      );
-      return;
-    }
-    NfcManager.instance.startSession(
-      pollingOptions: {NfcPollingOption.iso14443},
-      onDiscovered: (NfcTag tag) async {
-        print('NFC Tag discovered: $tag');
-        final ndef = Ndef.from(tag);
-        if (ndef == null) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('No NDEF data found.')));
-          NfcManager.instance.stopSession();
-          return;
-        }
-        // Read peer's code
-        final message = ndef.cachedMessage;
-        String? receivedCode;
-        String? peerSignature;
-        if (message != null && message.records.isNotEmpty) {
-          final record = message.records.first;
-          receivedCode = String.fromCharCodes(
-            record.payload,
-          ); // Simplified decoding
-          // Optionally decode peer signature from additional record
-          if (message.records.length > 1) {
-            peerSignature = String.fromCharCodes(message.records[1].payload);
-          }
-          print('Received NDEF message with ${message.records.first} records');
-        }
-        if (receivedCode == null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Could not decode code.')),
-          );
-          NfcManager.instance.stopSession();
-          return;
-        }
-        if (receivedCode == handshakeKey) {
-          // Check Hive for signature
-          var box = await Hive.openBox('signatures');
-          final mySignature = box.get('signature');
-          if (mySignature == null) {
-            // No signature, show alert and navigate
-            showDialog(
-              context: context,
-              builder: (context) => AlertDialog(
-                title: const Text('No Signature Found'),
-                content: const Text(
-                  'You do not have any saved signature on the device. Go to signature screen?',
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                    },
-                    child: const Text('Cancel'),
-                  ),
-                  TextButton(
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const SignatureScreen(),
-                        ),
-                      );
-                    },
-                    child: const Text('Go'),
-                  ),
-                ],
-              ),
-            );
-            NfcManager.instance.stopSession();
-            return;
-          }
-          // If peerSignature is not present, fallback to dummy or error
-          final peerSig = peerSignature ?? 'peer_signature_data';
-          final contract = ContractModel(
-            name: 'User Name',
-            timestamp: DateTime.now(),
-            signatureData: '$mySignature|$peerSig',
-          );
-          // Optionally, write contract to NFC or send to peer
-          // Navigate to success page
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => SuccessScreen(
-                contractA: contract,
-                contractB: contract, // For demo, using same contract
-              ),
-            ),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Codes do not match. Received: $receivedCode'),
-            ),
-          );
-        }
-        NfcManager.instance.stopSession();
-      },
-    );
-  }
+  // Future<void> startNfcAndExchange() async {
+  //   NfcAvailability availability = await NfcManager.instance
+  //       .checkAvailability();
+  //   if (availability != NfcAvailability.enabled) {
+  //     ScaffoldMessenger.of(context).showSnackBar(
+  //       const SnackBar(content: Text('NFC not available on this device.')),
+  //     );
+  //     return;
+  //   }
+  //   NfcManager.instance.startSession(
+  //     pollingOptions: {NfcPollingOption.iso14443},
+  //     onDiscovered: (NfcTag tag) async {
+  //       print('NFC Tag discovered: $tag');
+  //       final ndef = Ndef.from(tag);
+  //       if (ndef == null) {
+  //         ScaffoldMessenger.of(
+  //           context,
+  //         ).showSnackBar(const SnackBar(content: Text('No NDEF data found.')));
+  //         NfcManager.instance.stopSession();
+  //         return;
+  //       }
+  //       // Read peer's code
+  //       final message = ndef.cachedMessage;
+  //       String? receivedCode;
+  //       String? peerSignature;
+  //       if (message != null && message.records.isNotEmpty) {
+  //         final record = message.records.first;
+  //         receivedCode = String.fromCharCodes(
+  //           record.payload,
+  //         ); // Simplified decoding
+  //         // Optionally decode peer signature from additional record
+  //         if (message.records.length > 1) {
+  //           peerSignature = String.fromCharCodes(message.records[1].payload);
+  //         }
+  //         print('Received NDEF message with ${message.records.first} records');
+  //       }
+  //       if (receivedCode == null) {
+  //         ScaffoldMessenger.of(context).showSnackBar(
+  //           const SnackBar(content: Text('Could not decode code.')),
+  //         );
+  //         NfcManager.instance.stopSession();
+  //         return;
+  //       }
+  //       if (receivedCode == handshakeKey) {
+  //         // Check Hive for signature
+  //         var box = await Hive.openBox('signatures');
+  //         final mySignature = box.get('signature');
+  //         if (mySignature == null) {
+  //           // No signature, show alert and navigate
+  //           showDialog(
+  //             context: context,
+  //             builder: (context) => AlertDialog(
+  //               title: const Text('No Signature Found'),
+  //               content: const Text(
+  //                 'You do not have any saved signature on the device. Go to signature screen?',
+  //               ),
+  //               actions: [
+  //                 TextButton(
+  //                   onPressed: () {
+  //                     Navigator.of(context).pop();
+  //                   },
+  //                   child: const Text('Cancel'),
+  //                 ),
+  //                 TextButton(
+  //                   onPressed: () {
+  //                     Navigator.of(context).pop();
+  //                     Navigator.of(context).push(
+  //                       MaterialPageRoute(
+  //                         builder: (_) => const SignatureScreen(),
+  //                       ),
+  //                     );
+  //                   },
+  //                   child: const Text('Go'),
+  //                 ),
+  //               ],
+  //             ),
+  //           );
+  //           NfcManager.instance.stopSession();
+  //           return;
+  //         }
+  //         // If peerSignature is not present, fallback to dummy or error
+  //         final peerSig = peerSignature ?? 'peer_signature_data';
+  //         final contract = ContractModel(
+  //           name: 'User Name',
+  //           timestamp: DateTime.now(),
+  //           signatureData: '$mySignature|$peerSig',
+  //         );
+  //         // Optionally, write contract to NFC or send to peer
+  //         // Navigate to success page
+  //         Navigator.push(
+  //           context,
+  //           MaterialPageRoute(
+  //             builder: (_) => SuccessScreen(
+  //               contractA: contract,
+  //               contractB: contract, // For demo, using same contract
+  //             ),
+  //           ),
+  //         );
+  //       } else {
+  //         ScaffoldMessenger.of(context).showSnackBar(
+  //           SnackBar(
+  //             content: Text('Codes do not match. Received: $receivedCode'),
+  //           ),
+  //         );
+  //       }
+  //       NfcManager.instance.stopSession();
+  //     },
+  //   );
+  // }
 
   @override
   Widget build(BuildContext context) {
@@ -256,11 +260,50 @@ class _TradeCodeScreenState extends State<TradeCodeScreen> {
                   }),
                 ),
                 const SizedBox(height: 32),
-                ElevatedButton(
-                  onPressed: handshakeKey.length == 6
-                      ? startNfcAndExchange
-                      : null,
-                  child: const Text('Start NFC Scanning'),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: (_isLoading || handshakeKey.length != 6)
+                            ? null
+                            : () async {
+                                setState(() {
+                                  _isLoading = true;
+                                });
+                                await startNearbySharing();
+                              },
+                        child: _isLoading
+                            ? const SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    Colors.white,
+                                  ),
+                                  strokeWidth: 2.5,
+                                ),
+                              )
+                            : const Text('Start NFC Scanning'),
+                      ),
+                    ),
+                    if (_isDiscovering || _isLoading)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 12.0),
+                        child: IconButton(
+                          icon: const Icon(Icons.stop, color: Colors.red),
+                          tooltip: 'Stop Discovery',
+                          onPressed: () async {
+                            await Nearby().stopDiscovery();
+                            await Nearby().stopAdvertising();
+                            setState(() {
+                              _isDiscovering = false;
+                              _isLoading = false;
+                            });
+                          },
+                        ),
+                      ),
+                  ],
                 ),
               ],
             ),
@@ -268,5 +311,274 @@ class _TradeCodeScreenState extends State<TradeCodeScreen> {
         ),
       ],
     );
+  }
+
+  Future<void> startNearbySharing() async {
+    setState(() {
+      _isDiscovering = true;
+    });
+    // 1. Check for signature in Hive first
+    var box = await Hive.openBox('signatures');
+    final mySignature = box.get('signature');
+    if (mySignature == null || (mySignature is List && mySignature.isEmpty)) {
+      // No signature, show alert and navigate
+      setState(() {
+        _isDiscovering = false;
+      });
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('No Signature Found'),
+          content: const Text(
+            'You do not have any saved signature on the device. Go to signature screen?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const SignatureScreen()),
+                );
+              },
+              child: const Text('Go'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    // 2. Permissions (as before)
+    if (!await Permission.location.isGranted) {
+      await Permission.location.request();
+    }
+    if (!await Permission.location.serviceStatus.isEnabled) {
+      final location = loc.Location();
+      bool serviceEnabled = await location.requestService();
+      if (!serviceEnabled) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Location service is required.')),
+        );
+        return;
+      }
+    }
+    if (!await Permission.storage.isGranted) {
+      await Permission.storage.request();
+    }
+    bool bluetoothGranted = !(await Future.wait([
+      Permission.bluetooth.isGranted,
+      Permission.bluetoothAdvertise.isGranted,
+      Permission.bluetoothConnect.isGranted,
+      Permission.bluetoothScan.isGranted,
+    ])).any((element) => element == false);
+    if (!bluetoothGranted) {
+      await [
+        Permission.bluetooth,
+        Permission.bluetoothAdvertise,
+        Permission.bluetoothConnect,
+        Permission.bluetoothScan,
+      ].request();
+    }
+    if (!await Permission.bluetooth.serviceStatus.isEnabled) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Bluetooth service is required.')),
+      );
+      return;
+    }
+    await Permission.nearbyWifiDevices.request();
+
+    // 3. Nearby Connections logic
+    final Strategy strategy = Strategy.P2P_CLUSTER;
+    final String userName =
+        'User'; // TODO: Replace with actual user name if available
+    final String serviceId = "com.yourdomain.appname";
+
+    // Start advertising
+    try {
+      bool advertising = await Nearby().startAdvertising(
+        userName,
+        strategy,
+        onConnectionInitiated: (String id, ConnectionInfo info) {
+          // Called whenever a discoverer requests connection
+          // Accept connection and set up payload handlers
+          Nearby().acceptConnection(
+            id,
+            onPayLoadRecieved: (endpointId, payload) async {
+              // Handle received payload (e.g., handshakeKey, signature)
+              if (payload.type == PayloadType.BYTES) {
+                final data = String.fromCharCodes(payload.bytes!);
+                // Expecting: handshakeKey|peerSignature
+                final parts = data.split('|');
+                if (parts.length == 2 && parts[0] == handshakeKey) {
+                  final peerSignature = parts[1];
+                  final contractA = ContractModel(
+                    name: 'User Name',
+                    timestamp: DateTime.now(),
+                    signatureData: '$mySignature',
+                  );
+                  final contractB = ContractModel(
+                    name: 'Peer Name',
+                    timestamp: DateTime.now(),
+                    signatureData: '$peerSignature',
+                  );
+                  // Stop advertising/discovery after success
+                  Nearby().stopAdvertising();
+                  Nearby().stopDiscovery();
+                  setState(() {
+                    _isDiscovering = false;
+                  });
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => SuccessScreen(
+                        contractA: contractA,
+                        contractB: contractB,
+                      ),
+                    ),
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Handshake failed or invalid data.'),
+                    ),
+                  );
+                }
+              }
+            },
+            onPayloadTransferUpdate: (endpointId, payloadTransferUpdate) {},
+          );
+        },
+        onConnectionResult: (String id, Status status) {
+          // Called when connection is accepted/rejected
+          if (status == Status.CONNECTED) {
+            // Send handshakeKey and mySignature to peer
+            final payload = '$handshakeKey|$mySignature';
+            Nearby().sendBytesPayload(
+              id,
+              Uint8List.fromList(payload.codeUnits),
+            );
+          }
+        },
+        onDisconnected: (String id) {
+          // Called whenever a discoverer disconnects from advertiser
+        },
+        serviceId: serviceId,
+      );
+      if (!advertising) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to start advertising.')),
+        );
+        setState(() {
+          _isDiscovering = false;
+        });
+      }
+    } catch (exception) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Nearby error: $exception')));
+      setState(() {
+        _isDiscovering = false;
+      });
+    }
+
+    // Start discovery
+    try {
+      bool discovering = await Nearby().startDiscovery(
+        userName,
+        strategy,
+        onEndpointFound: (String id, String userName, String serviceId) {
+          // Called when an advertiser is found
+          // Request connection
+          try {
+            Nearby().requestConnection(
+              userName,
+              id,
+              onConnectionInitiated: (id, info) {
+                // Accept connection
+                Nearby().acceptConnection(
+                  id,
+                  onPayLoadRecieved: (endpointId, payload) async {
+                    if (payload.type == PayloadType.BYTES) {
+                      final data = String.fromCharCodes(payload.bytes!);
+                      // Expecting: handshakeKey|peerSignature
+                      final parts = data.split('|');
+                      if (parts.length == 2 && parts[0] == handshakeKey) {
+                        final peerSignature = parts[1];
+                        final contract = ContractModel(
+                          name: 'User Name',
+                          timestamp: DateTime.now(),
+                          signatureData: '$mySignature|$peerSignature',
+                        );
+                        Nearby().stopAdvertising();
+                        Nearby().stopDiscovery();
+                        setState(() {
+                          _isDiscovering = false;
+                        });
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => SuccessScreen(
+                              contractA: contract,
+                              contractB:
+                                  contract, // For demo, using same contract
+                            ),
+                          ),
+                        );
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Handshake failed or invalid data.'),
+                          ),
+                        );
+                      }
+                    }
+                  },
+                  onPayloadTransferUpdate:
+                      (endpointId, payloadTransferUpdate) {},
+                );
+              },
+              onConnectionResult: (id, status) {
+                if (status == Status.CONNECTED) {
+                  // Send handshakeKey and mySignature to peer
+                  final payload = '$handshakeKey|$mySignature';
+                  Nearby().sendBytesPayload(
+                    id,
+                    Uint8List.fromList(payload.codeUnits),
+                  );
+                }
+              },
+              onDisconnected: (id) {},
+            );
+          } catch (exception) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Nearby request error: $exception')),
+            );
+          }
+        },
+        onEndpointLost: (String? id) {},
+        serviceId: serviceId,
+      );
+      if (!discovering) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to start discovery.')),
+        );
+        setState(() {
+          _isDiscovering = false;
+        });
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Nearby error: $e')));
+      setState(() {
+        _isDiscovering = false;
+      });
+    }
   }
 }

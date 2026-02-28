@@ -1,21 +1,27 @@
 PODS:
   - FlutterMacOS (1.0.0)
+  - location (0.0.1):
+    - FlutterMacOS
   - path_provider_foundation (0.0.1):
     - Flutter
     - FlutterMacOS
 
 DEPENDENCIES:
   - FlutterMacOS (from `Flutter/ephemeral`)
+  - location (from `Flutter/ephemeral/.symlinks/plugins/location/macos`)
   - path_provider_foundation (from `Flutter/ephemeral/.symlinks/plugins/path_provider_foundation/darwin`)
 
 EXTERNAL SOURCES:
   FlutterMacOS:
     :path: Flutter/ephemeral
+  location:
+    :path: Flutter/ephemeral/.symlinks/plugins/location/macos
   path_provider_foundation:
     :path: Flutter/ephemeral/.symlinks/plugins/path_provider_foundation/darwin
 
 SPEC CHECKSUMS:
   FlutterMacOS: d0db08ddef1a9af05a5ec4b724367152bb0500b1
+  location: c002b64375c0739e7afa30cbd0b675554830d208
   path_provider_foundation: bb55f6dbba17d0dccd6737fe6f7f34fbd0376880
 
 PODFILE CHECKSUM: 54d867c82ac51cbd61b565781b9fada492027009
