@@ -16,12 +16,23 @@ class TradeCodeScreen extends StatefulWidget {
 
 class _TradeCodeScreenState extends State<TradeCodeScreen> {
   final TextEditingController _controller = TextEditingController();
+  final List<TextEditingController> _pinControllers = List.generate(
+    8,
+    (_) => TextEditingController(),
+  );
+  final List<FocusNode> _pinFocusNodes = List.generate(8, (_) => FocusNode());
   String handshakeKey = '';
   ContractModel? receivedContract;
 
   @override
   void dispose() {
     _controller.dispose();
+    for (final c in _pinControllers) {
+      c.dispose();
+    }
+    for (final f in _pinFocusNodes) {
+      f.dispose();
+    }
     super.dispose();
   }
 
@@ -32,50 +43,7 @@ class _TradeCodeScreenState extends State<TradeCodeScreen> {
     );
   }
 
-  /// Phone A: Write NDEF message containing handshakeKey
-  Future<void> writeNdefCode() async {
-    if (!await NfcManager.instance.isAvailable()) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('NFC not available on this device.')),
-      );
-      return;
-    }
-    NfcManager.instance.startSession(
-      pollingOptions: {NfcPollingOption.iso14443},
-      onDiscovered: (NfcTag tag) async {
-        final ndef = Ndef.from(tag);
-        if (ndef == null || !ndef.isWritable) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('Tag is not writable.')));
-          NfcManager.instance.stopSession();
-          return;
-        }
-        // final message = NdefMessage(
-        //   records: [
-        //     NdefRecord(identifier: null
-
-        //     , typeNameFormat: null, type: null, payload: null)
-        //     ],
-        // );
-        try {
-          // await ndef.write(message: "Add message with handshakeKey");
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Code "$handshakeKey" written to NFC tag.')),
-          );
-          NfcManager.instance.stopSession();
-        } catch (e) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('Failed to write: $e')));
-          // NfcManager.instance.stopSession(errorMessage: e.toString());
-        }
-      },
-    );
-  }
-
-  /// Phone B: Read NDEF message and compare to local handshakeKey
-  Future<void> readAndCompareNdefCode() async {
+  Future<void> startNfcAndExchange() async {
     if (!await NfcManager.instance.isAvailable()) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('NFC not available on this device.')),
@@ -93,20 +61,16 @@ class _TradeCodeScreenState extends State<TradeCodeScreen> {
           NfcManager.instance.stopSession();
           return;
         }
+        // Read peer's code
         final message = ndef.cachedMessage;
-        if (message == null || message.records.isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('No NDEF records found.')),
-          );
-          NfcManager.instance.stopSession();
-          return;
-        }
-        final record = message.records.first;
         String? receivedCode;
-        // if (record.typeNameFormat == NdefRecordTypeNameFormat.nfcWellKnown &&
-        //     record.type == 'T') {
-        //   receivedCode = NdefRecord.decodeText(record);
-        // }
+        if (message != null && message.records.isNotEmpty) {
+          final record = message.records.first;
+          // Uncomment and implement decoding if using text records
+          // if (record.typeNameFormat == NdefRecordTypeNameFormat.nfcWellKnown && record.type == 'T') {
+          //   receivedCode = NdefRecord.decodeText(record);
+          // }
+        }
         if (receivedCode == null) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Could not decode code.')),
@@ -115,188 +79,156 @@ class _TradeCodeScreenState extends State<TradeCodeScreen> {
           return;
         }
         if (receivedCode == handshakeKey) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Codes match! Proceeding to Phase 4.')),
+          // Codes match, exchange signatures and update contract
+          final mySignature =
+              'my_signature_data'; // Replace with actual signature logic
+          final peerSignature =
+              'peer_signature_data'; // Replace with actual peer signature logic
+          final contract = ContractModel(
+            name: 'User Name',
+            timestamp: DateTime.now(),
+            signatureData: mySignature + '|' + peerSignature,
           );
-          // TODO: Proceed to Phase 4
+          // Optionally, write contract to NFC or send to peer
+          // Navigate to success page
+          Navigator.pushReplacementNamed(
+            context,
+            '/success',
+            arguments: contract,
+          );
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Codes do not match. Received: $receivedCode'),
             ),
           );
-          // Send error response to the other device
-          if (ndef.isWritable) {
-            // final errorMessage = NdefMessage([
-            //   NdefRecord.createText('ERROR: Code mismatch'),
-            // ]);
-            try {
-              // await ndef.write(errorMessage);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Error response sent to device.')),
-              );
-            } catch (e) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Failed to send error response: $e')),
-              );
-            }
-          }
         }
         NfcManager.instance.stopSession();
       },
     );
   }
 
-  Future<void> swapContractNfc({required ContractModel contract}) async {
-    if (!await NfcManager.instance.isAvailable()) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('NFC not available on this device.')),
-      );
-      return;
-    }
-    NfcManager.instance.startSession(
-      pollingOptions: {NfcPollingOption.iso14443},
-      onDiscovered: (NfcTag tag) async {
-        final ndef = Ndef.from(tag);
-        if (ndef == null || !ndef.isWritable) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('Tag is not writable.')));
-          NfcManager.instance.stopSession();
-          return;
-        }
-        // final message = NdefMessage([
-        //   NdefRecord.createText(contract.toJsonString()),
-        // ]);
-        try {
-          // await ndef.write(message);
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('Contract sent via NFC.')));
-          NfcManager.instance.stopSession();
-        } catch (e) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to send contract: $e')),
-          );
-          NfcManager.instance.stopSession();
-        }
-      },
-    );
-  }
-
-  Future<void> receiveContractNfc() async {
-    if (!await NfcManager.instance.isAvailable()) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('NFC not available on this device.')),
-      );
-      return;
-    }
-    // NfcManager.instance.startSession(
-    //   onDiscovered: (NfcTag tag) async {
-    //     final ndef = Ndef.from(tag);
-    //     if (ndef == null) {
-    //       ScaffoldMessenger.of(
-    //         context,
-    //       ).showSnackBar(const SnackBar(content: Text('No NDEF data found.')));
-    //       NfcManager.instance.stopSession(errorMessage: 'No NDEF');
-    //       return;
-    //     }
-    //     final message = ndef.cachedMessage;
-    //     if (message == null || message.records.isEmpty) {
-    //       ScaffoldMessenger.of(context).showSnackBar(
-    //         const SnackBar(content: Text('No NDEF records found.')),
-    //       );
-    //       NfcManager.instance.stopSession(errorMessage: 'No records');
-    //       return;
-    //     }
-    //     final record = message.records.first;
-    //     String? contractJson;
-    //     if (record.typeNameFormat == NdefRecordTypeNameFormat.nfcWellKnown &&
-    //         record.type == 'T') {
-    //       contractJson = NdefRecord.decodeText(record);
-    //     }
-    //     if (contractJson == null) {
-    //       ScaffoldMessenger.of(context).showSnackBar(
-    //         const SnackBar(content: Text('Could not decode contract.')),
-    //       );
-    //       NfcManager.instance.stopSession(errorMessage: 'Decode failed');
-    //       return;
-    //     }
-    //     try {
-    //       receivedContract = ContractModel.fromJsonString(contractJson);
-    //       ScaffoldMessenger.of(
-    //         context,
-    //       ).showSnackBar(const SnackBar(content: Text('Contract received!')));
-    //       // TODO: Navigate to SuccessScreen and show contract
-    //     } catch (e) {
-    //       ScaffoldMessenger.of(context).showSnackBar(
-    //         SnackBar(content: Text('Failed to parse contract: $e')),
-    //       );
-    //     }
-    //     NfcManager.instance.stopSession();
-    //   },
-    // );
-  }
-
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Enter Handshake Key')),
-      body: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            TextField(
-              controller: _controller,
-              autofocus: true,
-              keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              decoration: const InputDecoration(
-                labelText: 'Handshake Key',
-                border: OutlineInputBorder(),
-              ),
-              onChanged: (value) {
-                setState(() {
-                  handshakeKey = value;
-                });
-              },
+    return Stack(
+      children: [
+        Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                Color(0xFF2196F3), // Blue
+                Color(0xFF001F54), // Navy Blue
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
-            const SizedBox(height: 32),
-            ElevatedButton(
-              onPressed: handshakeKey.isNotEmpty ? _proceedToScanning : null,
-              child: const Text('Proceed to Scanning'),
-            ),
-            ElevatedButton(
-              onPressed: handshakeKey.isNotEmpty ? writeNdefCode : null,
-              child: const Text('Provide (Write NFC)'),
-            ),
-            ElevatedButton(
-              onPressed: handshakeKey.isNotEmpty
-                  ? readAndCompareNdefCode
-                  : null,
-              child: const Text('Request (Read NFC)'),
-            ),
-            ElevatedButton(
-              onPressed: handshakeKey.isNotEmpty
-                  ? () {
-                      final contract = ContractModel(
-                        name: 'User Name',
-                        timestamp: DateTime.now(),
-                        signatureData: 'signature_base64_or_path',
-                      );
-                      swapContractNfc(contract: contract);
-                    }
-                  : null,
-              child: const Text('Send Contract'),
-            ),
-            ElevatedButton(
-              onPressed: handshakeKey.isNotEmpty ? receiveContractNfc : null,
-              child: const Text('Receive Contract'),
-            ),
-          ],
+          ),
         ),
-      ),
+        Scaffold(
+          backgroundColor: Colors.transparent,
+          appBar: AppBar(
+            automaticallyImplyLeading: false,
+            title: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 4,
+                  height: 32,
+                  margin: const EdgeInsets.only(right: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.yellow,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                Text(
+                  "Enter Handshake Key",
+                  style: const TextStyle(color: Colors.white),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+          ),
+          body: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // 8-digit separated PIN code field
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(6, (i) {
+                    return Expanded(
+                      child: Container(
+                        width: 40,
+                        margin: const EdgeInsets.symmetric(horizontal: 4),
+                        child: TextField(
+                          cursorColor: Colors.white,
+                          controller: _pinControllers[i],
+                          focusNode: _pinFocusNodes[i],
+                          keyboardType: TextInputType.number,
+                          textAlign: TextAlign.center,
+                          maxLength: 1,
+                          style: const TextStyle(
+                            fontSize: 24,
+                            letterSpacing: 2,
+                            color: Colors.white,
+                          ),
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                          ],
+                          decoration: const InputDecoration(
+                            counterText: '',
+                            focusColor: Colors.white,
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.all(
+                                Radius.circular(8),
+                              ),
+                              borderSide: BorderSide(
+                                color: Colors.white,
+                                width: 2,
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.all(
+                                Radius.circular(8),
+                              ),
+                              borderSide: BorderSide(
+                                color: Colors.white,
+                                width: 2,
+                              ),
+                            ),
+                          ),
+                          onChanged: (value) {
+                            if (value.length == 1 && i < 7) {
+                              _pinFocusNodes[i + 1].requestFocus();
+                            } else if (value.isEmpty && i > 0) {
+                              _pinFocusNodes[i - 1].requestFocus();
+                            }
+                            setState(() {
+                              handshakeKey = _pinControllers
+                                  .map((c) => c.text)
+                                  .join();
+                              _controller.text = handshakeKey;
+                            });
+                          },
+                        ),
+                      ),
+                    );
+                  }),
+                ),
+                const SizedBox(height: 32),
+                ElevatedButton(
+                  onPressed: handshakeKey.length == 6
+                      ? startNfcAndExchange
+                      : null,
+                  child: const Text('Start NFC Scanning'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
