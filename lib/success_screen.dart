@@ -25,12 +25,17 @@ class SuccessScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Contract Template:',
+                'Bump Successful!',
                 style: Theme.of(context).textTheme.headlineLarge,
               ),
               const SizedBox(height: 16),
               Text(
                 'Name A: ${contractA.name}\nName B: ${contractB.name}\nTimestamp: ${contractA.timestamp}\nTimestamp: ${contractB.timestamp}',
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed euismod, nunc ut laoreet dictum, massa erat ultricies enim, nec dictum ex nulla ac nisi.',
+                style: TextStyle(color: Colors.black54),
               ),
               const SizedBox(height: 32),
               Text('Signatures:', style: Theme.of(context).textTheme.bodySmall),
